@@ -1,0 +1,14 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E203
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist,
+    .venv,
+    venv,
+    .env,
+    env
+per-file-ignores =
+    __init__.py:F401
