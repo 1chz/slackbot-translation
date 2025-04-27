@@ -103,6 +103,11 @@ def handle_message_edit(event: Dict[str, Any], client: Any) -> None:
     ts: str = message.get("ts")
     text: str = message.get("text", "")
 
+    if text == "This message was deleted.":
+        logger.debug("top-level thread deleted")
+        handle_message_delete(event, client)
+        return
+
     logger.debug(f"Processing edited message in channel {channel} with timestamp {ts}")
 
     source_lang: str = LARGE_LANGUAGE_MODEL.detect_language(text)
