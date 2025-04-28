@@ -3,15 +3,13 @@ Ollama language model provider implementation.
 """
 
 import asyncio
-
 from typing import Dict, List, Any
 
 import requests
 
-from core.models.providers import LargeLanguageModel
-from core.models.translation import TranslationRequest, TranslationResponse
-from core.utils.language import find_national_flag
-from llm.prompts.translation import PROMPT_DETECT_LANGUAGE, PROMPT_TRANSLATE
+from core import LargeLanguageModel, TranslationRequest, TranslationResponse
+from core.util import find_national_flag
+from llm.prompt import PROMPT_DETECT_LANGUAGE, PROMPT_TRANSLATE
 
 
 class OllamaLargeLanguageModel(LargeLanguageModel):
@@ -36,8 +34,8 @@ class OllamaLargeLanguageModel(LargeLanguageModel):
         if model_name is None:
             raise ValueError("Ollama model name is not set")
 
-        self.api: str = host
-        self.model_name: str = model_name
+        self.__api: str = host
+        self.__model_name: str = model_name
 
     def detect_language(self, text: str) -> str:
         """
@@ -67,7 +65,6 @@ class OllamaLargeLanguageModel(LargeLanguageModel):
 
         async def translate_all_async():
             async def _translate_one(target_lang: str) -> str:
-                flag: str = find_national_flag(target_lang)
                 prompt_with_langs: str = f"""{PROMPT_TRANSLATE}
                         Translate the following text from {request.source_lang} to {target_lang}:"""
 
@@ -75,7 +72,7 @@ class OllamaLargeLanguageModel(LargeLanguageModel):
                     translated_text: str = self.__query_ollama(
                         prompt_with_langs, request.text
                     )
-                    return f"{flag} {translated_text}"
+                    return f"{find_national_flag(target_lang)} {translated_text}"
 
                 return await asyncio.to_thread(sync_translate)
 
@@ -102,9 +99,9 @@ class OllamaLargeLanguageModel(LargeLanguageModel):
         Raises:
             Exception: If the Ollama API returns an error
         """
-        url: str = f"{self.api}/api/generate"
+        url: str = f"{self.__api}/api/generate"
         data: Dict[str, Any] = {
-            "model": self.model_name,
+            "model": self.__model_name,
             "prompt": f"{prompt}\n\n{user_input}",
             "stream": False,
         }

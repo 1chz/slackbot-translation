@@ -1,81 +1,84 @@
 """
-Slack bot implementation for the translation bot.
+Slack event handler implementation for the translation middleware.
 """
 
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Callable
 
 from slack_bolt import App
+from slack_sdk.web.async_client import AsyncWebClient
 
-import config
 import factory
-from core.models.translation import TranslationRequest, TranslationResponse
-from core.utils.language import find_target_languages
+from core import config, TranslationRequest, TranslationResponse
+from core.util import find_target_languages
 
 logging.basicConfig(
     level=config.LOG_LEVEL,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("slack_translation_bot")
+__logger = logging.getLogger("slack_translation_bot")
 
 app: App = App(token=config.SLACK_BOT_TOKEN)
 
-LARGE_LANGUAGE_MODEL: Any = factory.large_language_model()
-DATABASE: Any = factory.database()
+__LARGE_LANGUAGE_MODEL: Any = factory.large_language_model()
+__DATABASE: Any = factory.database()
 
-SECTION_BLOCK_TYPE = "section"
-DIVIDER_BLOCK = {"type": "divider"}
+__SECTION_BLOCK_TYPE = "section"
+__DIVIDER_BLOCK = {"type": "divider"}
 
 
 @app.event({"type": "message", "subtype": None})
-def handle_new_message(event: Dict[str, Any], say: Callable, client: Any) -> None:
+def handle_message(
+    event: Dict[str, Any], say: Callable, client: AsyncWebClient
+) -> None:
     """
     Handle new messages in Slack.
 
     Args:
         event: The Slack event
         say: Function to send a message to Slack
+        client: The Slack client
     """
     if __is_bot_message(event):
-        logger.debug("Ignoring bot message")
+        __logger.debug("Ignoring bot message")
         return
 
     channel: str = event.get("channel")
     ts: str = event.get("ts")
     text: str = event.get("text", "")
 
-    logger.debug(f"Processing new message in channel {channel} with timestamp {ts}")
+    __logger.debug(f"Processing new message in channel {channel} with timestamp {ts}")
     response: Optional[Dict[str, Any]] = say(
         channel=channel, thread_ts=ts, text=":hourglass_flowing_sand: Translating..."
     )
     if response:
-        logger.debug("Saving translation reference to database")
-        DATABASE.save_translated_message_reference(
+        __logger.debug("Saving translation reference to database")
+        __DATABASE.insert_message_map(
             src_channel=channel,
             src_ts=ts,
             dst_channel=response["channel"],
             dst_ts=response["ts"],
         )
 
-    source_lang: str = LARGE_LANGUAGE_MODEL.detect_language(text)
-    logger.debug(f"Detected language: {source_lang}")
+    source_lang: str = __LARGE_LANGUAGE_MODEL.detect_language(text)
+    __logger.debug(f"Detected language: {source_lang}")
 
     target_langs: List[str] = find_target_languages(source_lang)
-    logger.debug(f"Target languages: {target_langs}")
+    __logger.debug(f"Target languages: {target_langs}")
 
     translation_request: TranslationRequest = TranslationRequest(
         text=text, source_lang=source_lang, target_lang=target_langs
     )
 
-    logger.debug("Translating message")
-    translation_response: TranslationResponse = LARGE_LANGUAGE_MODEL.translate(
+    __logger.debug("Translating message")
+    translation_response: TranslationResponse = __LARGE_LANGUAGE_MODEL.translate(
         translation_request
     )
     slack_message: Dict[str, Any] = __format_translation_as_slack_message(
         translation_response
     )
 
-    logger.debug("Updating translation as reply")
+    __logger.debug("Updating translation as reply")
     client.chat_update(
         channel=response["channel"],
         ts=response["ts"],
@@ -85,7 +88,7 @@ def handle_new_message(event: Dict[str, Any], say: Callable, client: Any) -> Non
 
 
 @app.event({"type": "message", "subtype": "message_changed"})
-def handle_message_edit(event: Dict[str, Any], client: Any) -> None:
+def handle_message_changed(event: Dict[str, Any], client: AsyncWebClient) -> None:
     """
     Handle edited messages in Slack.
 
@@ -96,7 +99,7 @@ def handle_message_edit(event: Dict[str, Any], client: Any) -> None:
     message: Dict[str, Any] = event.get("message", {})
 
     if __is_bot_message(message):
-        logger.debug("Ignoring bot message edit")
+        __logger.debug("Ignoring bot message edit")
         return
 
     channel: str = event.get("channel")
@@ -104,28 +107,28 @@ def handle_message_edit(event: Dict[str, Any], client: Any) -> None:
     text: str = message.get("text", "")
 
     if text == "This message was deleted.":
-        logger.debug("top-level thread deleted")
-        handle_message_delete(event, client)
+        __logger.debug("top-level thread deleted")
+        handle_message_deleted(event, client)
         return
 
-    logger.debug(f"Processing edited message in channel {channel} with timestamp {ts}")
+    __logger.debug(
+        f"Processing edited message in channel {channel} with timestamp {ts}"
+    )
 
-    source_lang: str = LARGE_LANGUAGE_MODEL.detect_language(text)
-    logger.debug(f"Detected language: {source_lang}")
+    source_lang: str = __LARGE_LANGUAGE_MODEL.detect_language(text)
+    __logger.debug(f"Detected language: {source_lang}")
 
     target_langs: List[str] = find_target_languages(source_lang)
-    logger.debug(f"Target languages: {target_langs}")
+    __logger.debug(f"Target languages: {target_langs}")
 
-    logger.debug("Checking for existing translation")
-    translations: Optional[Tuple[str, str]] = DATABASE.get_translated_message_reference(
-        channel, ts
-    )
+    __logger.debug("Checking for existing translation")
+    translations: Optional[Tuple[str, str]] = __DATABASE.select_message_map(channel, ts)
 
     if translations:
         dst_channel: str
         dst_ts: str
         dst_channel, dst_ts = translations
-        logger.debug(
+        __logger.debug(
             f"Found existing translation in channel {dst_channel} with timestamp {dst_ts}"
         )
 
@@ -133,15 +136,15 @@ def handle_message_edit(event: Dict[str, Any], client: Any) -> None:
             text=text, source_lang=source_lang, target_lang=target_langs
         )
 
-        logger.debug("Translating edited message")
-        translation_response: TranslationResponse = LARGE_LANGUAGE_MODEL.translate(
+        __logger.debug("Translating edited message")
+        translation_response: TranslationResponse = __LARGE_LANGUAGE_MODEL.translate(
             translation_request
         )
         slack_message: Dict[str, Any] = __format_translation_as_slack_message(
             translation_response
         )
 
-        logger.debug("Updating existing translation")
+        __logger.debug("Updating existing translation")
         client.chat_update(
             channel=dst_channel,
             ts=dst_ts,
@@ -150,11 +153,11 @@ def handle_message_edit(event: Dict[str, Any], client: Any) -> None:
         )
 
     else:
-        logger.debug("No existing translation found, handling as new message")
+        __logger.debug("No existing translation found, handling as new message")
         new_event: Dict[str, Any] = event.copy()
         new_event.update({"channel": channel, "ts": ts, "text": text})
 
-        handle_new_message(
+        handle_message(
             new_event,
             lambda _text, thread_ts: client.chat_postMessage(
                 channel=channel, text=_text, thread_ts=thread_ts
@@ -163,7 +166,7 @@ def handle_message_edit(event: Dict[str, Any], client: Any) -> None:
 
 
 @app.event({"type": "message", "subtype": "message_deleted"})
-def handle_message_delete(event: Dict[str, Any], client: Any) -> None:
+def handle_message_deleted(event: Dict[str, Any], client: AsyncWebClient) -> None:
     """
     Handle deleted messages in Slack.
 
@@ -172,30 +175,30 @@ def handle_message_delete(event: Dict[str, Any], client: Any) -> None:
         client: The Slack client
     """
     if __is_bot_message(event.get("previous_message", {})):
-        logger.debug("Ignoring bot message delete")
+        __logger.debug("Ignoring bot message delete")
         return
 
     channel: str = event.get("channel")
     ts: str = event.get("previous_message", {}).get("ts")
 
-    logger.debug(f"Processing deleted message in channel {channel} with timestamp {ts}")
-
-    logger.debug("Checking for existing translation")
-    translations: Optional[Tuple[str, str]] = DATABASE.get_translated_message_reference(
-        channel, ts
+    __logger.debug(
+        f"Processing deleted message in channel {channel} with timestamp {ts}"
     )
+
+    __logger.debug("Checking for existing translation")
+    translations: Optional[Tuple[str, str]] = __DATABASE.select_message_map(channel, ts)
 
     if translations:
         dst_channel, dst_ts = translations
-        logger.debug(
+        __logger.debug(
             f"Found existing translation in channel {dst_channel} with timestamp {dst_ts}"
         )
 
-        logger.debug("Deleting translation")
+        __logger.debug("Deleting translation")
         client.chat_delete(channel=dst_channel, ts=dst_ts)
 
-        logger.debug("Removing translation reference from database")
-        DATABASE.delete_translated_message_reference(channel, ts)
+        __logger.debug("Removing translation reference from database")
+        __DATABASE.delete_message_map(channel, ts)
 
 
 def __is_bot_message(message: Dict[str, Any]) -> bool:
@@ -225,7 +228,7 @@ def __format_translation_as_slack_message(
     """
     message_blocks = [
         __section_block(response.original_text),
-        DIVIDER_BLOCK,
+        __DIVIDER_BLOCK,
     ]
     message_blocks.extend(
         __section_block(translated_text) for translated_text in response.translated_text
@@ -235,7 +238,7 @@ def __format_translation_as_slack_message(
 
 def __section_block(text: str) -> Dict[str, Any]:
     section_block = {
-        "type": SECTION_BLOCK_TYPE,
+        "type": __SECTION_BLOCK_TYPE,
         "fields": [{"type": "mrkdwn", "text": text}],
     }
     return section_block

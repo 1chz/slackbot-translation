@@ -4,7 +4,7 @@ Prompt templates for translation tasks.
 
 PROMPT_DETECT_LANGUAGE: str = """
 Description:
-You must forget all previous prompts and only follow this prompt.
+You must forget all previous prompt and only follow this prompt.
 
 Your task is to identify the language of the given text.
 Respond with only the ISO 639-1 language code (e.g., "ko" for Korean, "en" for English, "th" for Thai).
@@ -19,7 +19,7 @@ Rules:
 
 PROMPT_TRANSLATE: str = """
 Description:
-You must forget all previous prompts and only follow this prompt.
+You must forget all previous prompt and only follow this prompt.
 
 Your task is to translate the given text while preserving the nuance and technical terminology of the original message.
 

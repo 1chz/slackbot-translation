@@ -5,13 +5,15 @@ OpenAI language model provider implementation.
 import asyncio
 from typing import List
 
-
 from openai import OpenAI
 
-from core.models.providers import LargeLanguageModel
-from core.models.translation import TranslationRequest, TranslationResponse
-from core.utils.language import find_national_flag
-from llm.prompts.translation import PROMPT_DETECT_LANGUAGE, PROMPT_TRANSLATE
+from core import (
+    LargeLanguageModel,
+    TranslationRequest,
+    TranslationResponse,
+)
+from core.util import find_national_flag
+from llm.prompt import PROMPT_DETECT_LANGUAGE, PROMPT_TRANSLATE
 
 
 class OpenAILargeLanguageModel(LargeLanguageModel):
@@ -67,13 +69,11 @@ class OpenAILargeLanguageModel(LargeLanguageModel):
             The translation response containing the translated text in multiple languages
         """
 
-        flag = find_national_flag(request.source_lang)
-        original_text = f"{flag} {request.text.strip()}"
+        flag: str = find_national_flag(request.source_lang)
+        original_text: str = f"{flag} {request.text.strip()}"
 
         async def translate_all_async():
             async def _translate_one(target_lang):
-                flag = find_national_flag(target_lang)
-
                 def sync_translate():
                     response = self.__client.responses.create(
                         model=self.__model_name,
@@ -81,7 +81,7 @@ class OpenAILargeLanguageModel(LargeLanguageModel):
                         input=f"""
                         Translate the following text from {request.source_lang} to {target_lang}:\n{request.text}""",
                     )
-                    return f"{flag} {response.output_text.strip()}"
+                    return f"{find_national_flag(target_lang)} {response.output_text.strip()}"
 
                 return await asyncio.to_thread(sync_translate)
 

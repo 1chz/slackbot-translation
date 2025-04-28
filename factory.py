@@ -4,8 +4,7 @@ Factory module for creating instances of language model providers and databases.
 
 from typing import Dict, Optional
 
-import config
-from core.models.providers import Database, LargeLanguageModel
+from core import config, LargeLanguageModel, Database
 from db import SQLiteDatabase
 from llm import OllamaLargeLanguageModel, OpenAILargeLanguageModel
 

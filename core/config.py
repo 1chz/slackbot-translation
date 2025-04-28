@@ -1,7 +1,7 @@
 import os
 import sys
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -40,12 +40,13 @@ if not SLACK_APP_TOKEN or not SLACK_BOT_TOKEN or not LLM_PROVIDER:
 
 print("✅ Successfully loaded!")
 
-summary_lines = []
-summary_lines.append("=" * 50)
-summary_lines.append("🔧 Configuration Summary".center(50))
-summary_lines.append("=" * 50)
-summary_lines.append(f"{'LOG_LEVEL'.ljust(20)}: {LOG_LEVEL}")
-summary_lines.append("-" * 50)
+summary_lines = [
+    "=" * 50,
+    "🔧 Configuration Summary".center(50),
+    "=" * 50,
+    f"{'LOG_LEVEL'.ljust(20)}: {LOG_LEVEL}",
+    "-" * 50,
+]
 
 if SLACK_APP_TOKEN:
     summary_lines.append(f"{'SLACK_APP_TOKEN'.ljust(20)}: <masked>")
